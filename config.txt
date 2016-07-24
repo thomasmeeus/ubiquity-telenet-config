@@ -1,0 +1,324 @@
+ ## Some default firewall rules to enable ipv6 and drop invalid packets
+
+ firewall {
+     all-ping enable
+     broadcast-ping disable
+     ipv6-name WANv6_IN {
+         default-action drop
+         description "WAN inbound traffic forwarded to LAN"
+         enable-default-log
+         rule 10 {
+             action accept
+             description "Allow established/related sessions"
+             state {
+                 established enable
+                 related enable
+             }
+         }
+         rule 20 {
+             action drop
+             description "Drop invalid state"
+             state {
+                 invalid enable
+             }
+         }
+         rule 30 {
+             action accept
+             description "Allow IPv6 icmp"
+             protocol ipv6-icmp
+         }
+     }
+     ipv6-name WANv6_LOCAL {
+         default-action drop
+         description "WAN inbound traffic to the router"
+         enable-default-log
+         rule 10 {
+             action accept
+             description "Allow established/related sessions"
+             state {
+                 established enable
+                 related enable
+             }
+         }
+         rule 20 {
+             action drop
+             description "Drop invalid state"
+             state {
+                 invalid enable
+             }
+         }
+         rule 30 {
+             action accept
+             description "Allow IPv6 icmp"
+             protocol ipv6-icmp
+         }
+         rule 40 {
+             action accept
+             description "allow dhcpv6"
+             destination {
+                 port 546
+             }
+             protocol udp
+             source {
+                 port 547
+             }
+         }
+     }
+     ipv6-receive-redirects disable
+     ipv6-src-route disable
+     ip-src-route disable
+     log-martians enable
+     name WANv4_IN {
+         default-action drop
+         description ""
+         rule 1 {
+             action accept
+             description "Allow established/related sessions"
+             log disable
+             protocol all
+             state {
+                 established enable
+                 invalid disable
+                 new disable
+                 related enable
+             }
+         }
+         rule 2 {
+             action drop
+             description "Drop invalid state"
+             log disable
+             protocol all
+             state {
+                 established disable
+                 invalid enable
+                 new disable
+                 related disable
+             }
+         }
+     }
+     name WANv4_LOCAL {
+         default-action drop
+         description ""
+         rule 1 {
+             action accept
+             description "Allow established/related sessions"
+             log disable
+             protocol all
+             state {
+                 established enable
+                 invalid disable
+                 new disable
+                 related enable
+             }
+         }
+         rule 2 {
+             action drop
+             description "Drop invalid state"
+             log disable
+             protocol all
+             state {
+                 established disable
+                 invalid enable
+                 new disable
+                 related disable
+             }
+         }
+     }
+     receive-redirects disable
+     send-redirects enable
+     source-validation disable
+     syn-cookies enable
+ }
+
+ ## Request external ip addresses via eth0, configure all other interfaces as switch.
+ ## Telenet offers both an external ipv4 and an ipv6 range. The range is a /56 of which I use a /64 for my internal network
+
+ interfaces {
+     ethernet eth0 {
+         address dhcp
+         dhcpv6-pd {
+             pd 1 {
+                 interface switch0 {
+                     service slaac
+                 }
+                 prefix-length /56
+             }
+             rapid-commit enable
+         }
+         duplex auto
+         firewall {
+             in {
+                 ipv6-name WANv6_IN
+                 name WANv4_IN
+             }
+             local {
+                 ipv6-name WANv6_LOCAL
+                 name WANv4_LOCAL
+             }
+         }
+         poe {
+             output off
+         }
+         speed auto
+     }
+     ethernet eth1 {
+         duplex auto
+         poe {
+             output off
+         }
+         speed auto
+     }
+     ethernet eth2 {
+         duplex auto
+         poe {
+             output off
+         }
+         speed auto
+     }
+     ethernet eth3 {
+         duplex auto
+         poe {
+             output off
+         }
+         speed auto
+     }
+     ethernet eth4 {
+         duplex auto
+         poe {
+             output off
+         }
+         speed auto
+     }
+     loopback lo {
+     }
+     switch switch0 {
+         address 192.168.1.1/24
+         address 2a02:xxxx:yyyy:zzzz::1/64
+         ipv6 {
+             dup-addr-detect-transmits 1
+             router-advert {
+                 cur-hop-limit 64
+                 link-mtu 0
+                 managed-flag false
+                 max-interval 600
+                 other-config-flag false
+                 prefix ::/64 {
+                     autonomous-flag true
+                     on-link-flag true
+                     valid-lifetime 2592000
+                 }
+                 radvd-options "RDNSS 2a02:xxxx:yyyy:zzzz::1 {};"
+                 reachable-time 0
+                 retrans-timer 0
+                 send-advert true
+             }
+         }
+         mtu 1500
+         switch-port {
+             interface eth1 {
+             }
+             interface eth2 {
+             }
+             interface eth3 {
+             }
+             interface eth4 {
+             }
+             vlan-aware disable
+         }
+     }
+ }
+ 
+ service {
+     dhcp-server {
+         disabled false
+         hostfile-update disable
+         shared-network-name default {
+             authoritative disable
+             subnet 192.168.1.0/24 {
+                 default-router 192.168.1.1
+                 dns-server 192.168.1.1
+                 lease 86400
+                 start 192.168.1.100 {
+                     stop 192.168.1.200
+                 }
+             }
+         }
+     }
+     dns {
+         forwarding {
+             cache-size 150
+             listen-on switch0
+         }
+     }
+     gui {
+         http-port 80
+         https-port 443
+         listen-address 192.168.1.1
+         older-ciphers disable
+     }
+     nat {
+         rule 5000 {
+             description "masquerade for wan"
+             log disable
+             outbound-interface eth0
+             protocol all
+             type masquerade
+         }
+     }
+     ssh {
+         listen-address 192.168.1.1
+         port 22
+         protocol-version v2
+     }
+ }
+ system {
+     host-name ubnt
+     login {
+         user admin {
+             authentication {
+                 encrypted-password $6$nope.
+             }
+             full-name admin
+             level admin
+         }
+     }
+     name-server 8.8.8.8
+     name-server 8.8.4.4
+     name-server 2001:4860:4860::8888
+     name-server 2001:4860:4860::8844
+     ntp {
+         server 0.ubnt.pool.ntp.org {
+         }
+         server 1.ubnt.pool.ntp.org {
+         }
+         server 2.ubnt.pool.ntp.org {
+         }
+         server 3.ubnt.pool.ntp.org {
+         }
+     }
+     offload {
+         hwnat enable
+         ipsec enable
+         ipv4 {
+             forwarding enable
+         }
+         ipv6 {
+             forwarding enable
+         }
+     }
+     syslog {
+         global {
+             facility all {
+                 level notice
+             }
+             facility protocols {
+                 level debug
+             }
+         }
+     }
+     time-zone Europe/Brussels
+     traffic-analysis {
+         dpi disable
+         export disable
+     }
+ }
