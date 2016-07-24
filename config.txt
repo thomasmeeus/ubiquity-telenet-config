@@ -297,7 +297,7 @@
          }
      }
      offload {
-         hwnat enable
+         hwnat disable ## see forwarding below for the same
          ipsec enable
          ipv4 {
              forwarding enable
